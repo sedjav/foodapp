@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useApi, useAuth } from "../auth";
+import { utcIsoToJalaliDate } from "../utils/jalali";
 
 import {
   Alert,
@@ -155,7 +156,7 @@ export default function AdminUsers() {
                       <TableCell>{u.email}</TableCell>
                       <TableCell>{u.displayName}</TableCell>
                       <TableCell>{u.role}</TableCell>
-                      <TableCell>{new Date(u.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>{utcIsoToJalaliDate(u.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
