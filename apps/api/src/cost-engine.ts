@@ -67,6 +67,11 @@ export async function computeEventCharges(db: Db, eventId: string): Promise<{
     });
   }
 
+  const isHostParticipant = (participantId: string) => {
+    const ownerUserId = participantMap.get(participantId)?.ownerUserId;
+    return ownerUserId ? hostUserIds.has(ownerUserId) : false;
+  };
+
   const payorOverrides = await db
     .selectFrom("event_payor_overrides")
     .select(["participant_id", "payor_user_id"])
@@ -131,7 +136,7 @@ export async function computeEventCharges(db: Db, eventId: string): Promise<{
     const amountIrr = sc.amount_irr;
     if (typeof amountIrr !== "number" || !Number.isInteger(amountIrr) || amountIrr <= 0) continue;
 
-    const attending = [...attendingParticipantIds];
+    const attending = hostFoodExemptionEnabled ? [...attendingParticipantIds].filter((pid) => !isHostParticipant(pid)) : [...attendingParticipantIds];
     if (attending.length === 0) continue;
 
     const shareCount = attending.length;
@@ -172,14 +177,12 @@ export async function computeEventCharges(db: Db, eventId: string): Promise<{
 
     if (attendingAllocated.length === 0) continue;
 
-    const chargeableAllocated = hostFoodExemptionEnabled
-      ? attendingAllocated.filter((pid) => {
-          const ownerUserId = participantMap.get(pid)?.ownerUserId;
-          return ownerUserId ? !hostUserIds.has(ownerUserId) : true;
-        })
-      : attendingAllocated;
+    const chargeableAllocated = hostFoodExemptionEnabled ? attendingAllocated.filter((pid) => !isHostParticipant(pid)) : attendingAllocated;
 
-    const finalAllocated = chargeableAllocated.length > 0 ? chargeableAllocated : attendingAllocated;
+    const nonHostAttendingAll = hostFoodExemptionEnabled ? [...attendingParticipantIds].filter((pid) => !isHostParticipant(pid)) : [...attendingParticipantIds];
+
+    const finalAllocated = chargeableAllocated.length > 0 ? chargeableAllocated : nonHostAttendingAll;
+    if (finalAllocated.length === 0) continue;
 
     const totalCost = s.quantity * s.price_irr;
     const shareCount = finalAllocated.length;
