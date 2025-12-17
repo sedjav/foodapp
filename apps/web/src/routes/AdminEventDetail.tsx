@@ -830,7 +830,7 @@ export default function AdminEventDetail() {
                 </Select>
               </FormControl>
               <Button variant="contained" size="small" onClick={addHost} disabled={!newHostUserId}>
-                {t("admin.events.detail.addGuest")}
+                {t("admin.events.detail.addHost", { defaultValue: "Add host" })}
               </Button>
             </Stack>
             <Stack spacing={1}>
