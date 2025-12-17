@@ -1182,8 +1182,29 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
     async (req: FastifyRequest, reply: FastifyReply) => {
       await requireAdmin(app, req);
       const { eventId, participantId } = req.params as { eventId: string; participantId: string };
-      await db.deleteFrom("event_participants").where("event_id", "=", eventId).where("participant_id", "=", participantId).execute();
-      await db.deleteFrom("event_payor_overrides").where("event_id", "=", eventId).where("participant_id", "=", participantId).execute();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom("selection_allocations")
+          .where("participant_id", "=", participantId)
+          .where(
+            "selection_id",
+            "in",
+            trx.selectFrom("selections").select(["id"]).where("event_id", "=", eventId) as any
+          )
+          .execute();
+
+        await trx
+          .deleteFrom("event_participants")
+          .where("event_id", "=", eventId)
+          .where("participant_id", "=", participantId)
+          .execute();
+
+        await trx
+          .deleteFrom("event_payor_overrides")
+          .where("event_id", "=", eventId)
+          .where("participant_id", "=", participantId)
+          .execute();
+      });
       return reply.send({ ok: true });
     }
   );

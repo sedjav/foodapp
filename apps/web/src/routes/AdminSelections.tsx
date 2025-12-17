@@ -82,6 +82,11 @@ export default function AdminSelections() {
   const [quantity, setQuantity] = useState(1);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Record<string, boolean>>({});
 
+  const participantLabel = (pid: string) => {
+    const p = participants.find((x) => x.id === pid);
+    return p ? p.display_name : pid;
+  };
+
   const attendingParticipantIds = useMemo(() => {
     const ids = new Set<string>();
     for (const ep of eventParticipants) {
@@ -89,6 +94,19 @@ export default function AdminSelections() {
     }
     return ids;
   }, [eventParticipants]);
+
+  const unselectedAttendingParticipantIds = useMemo(() => {
+    const selected = new Set<string>();
+    for (const s of selections) {
+      for (const a of s.allocations ?? []) {
+        selected.add(a.participant_id);
+      }
+    }
+
+    return [...attendingParticipantIds]
+      .filter((pid) => !selected.has(pid))
+      .sort((a, b) => participantLabel(a).localeCompare(participantLabel(b)));
+  }, [attendingParticipantIds, selections, participants]);
 
   const load = async () => {
     if (!eventId) return;
@@ -118,11 +136,6 @@ export default function AdminSelections() {
   useEffect(() => {
     load();
   }, [eventId]);
-
-  const participantLabel = (pid: string) => {
-    const p = participants.find((x) => x.id === pid);
-    return p ? p.display_name : pid;
-  };
 
   const toggleParticipant = (pid: string) => {
     setSelectedParticipantIds((prev) => ({
@@ -181,6 +194,31 @@ export default function AdminSelections() {
   return (
     <Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      <Card sx={{ mb: 3 }}>
+        <CardHeader
+          title={t("admin.selections.missingSelectionsTitle", { defaultValue: "Participants without food selection" })}
+          subheader={t("admin.selections.missingSelectionsCount", {
+            defaultValue: "{{count}} attending participant(s) have no selection",
+            count: unselectedAttendingParticipantIds.length
+          })}
+        />
+        <CardContent>
+          {unselectedAttendingParticipantIds.length === 0 ? (
+            <Typography color="text.secondary">
+              {t("admin.selections.missingSelectionsNone", { defaultValue: "All attending participants have at least one selection." })}
+            </Typography>
+          ) : (
+            <Stack spacing={0.5}>
+              {unselectedAttendingParticipantIds.map((pid) => (
+                <Typography key={pid} variant="body2">
+                  {participantLabel(pid)}
+                </Typography>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
 
       <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
         <Card sx={{ flex: 1, maxWidth: 500 }}>

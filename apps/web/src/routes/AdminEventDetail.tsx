@@ -381,6 +381,17 @@ export default function AdminEventDetail() {
     await load();
   };
 
+  const removeParticipantFromEvent = async (participantId: string) => {
+    if (!eventId) return;
+    setError(null);
+    try {
+      await api.fetch(`/api/v1/admin/events/${eventId}/participants/${participantId}`, { method: "DELETE" });
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "Error");
+    }
+  };
+
   const transitionState = async (targetState: string) => {
     if (!eventId) return;
     setError(null);
@@ -731,6 +742,9 @@ export default function AdminEventDetail() {
                         </FormControl>
                         <Button size="small" variant="outlined" onClick={() => clearOverride(ep.participant_id)}>
                           {t("admin.events.detail.clearOverride")}
+                        </Button>
+                        <Button size="small" color="error" onClick={() => removeParticipantFromEvent(ep.participant_id)}>
+                          {t("admin.events.detail.remove")}
                         </Button>
                       </Stack>
                     </Stack>
