@@ -1,0 +1,19 @@
+{
+  "name": "food-events-mvp",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @foodapp/api\" \"npm run dev -w @foodapp/web\"",
+    "build": "npm run build -ws",
+    "typecheck": "npm run typecheck -ws"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
