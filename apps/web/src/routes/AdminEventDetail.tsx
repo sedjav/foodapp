@@ -34,6 +34,7 @@ import {
 
 type UserRow = {
   id: string;
+  mobilePhone?: string;
   email: string;
   displayName: string;
   role: string;
@@ -167,6 +168,10 @@ export default function AdminEventDetail() {
   const [newSharedCostName, setNewSharedCostName] = useState<string>("");
   const [newSharedCostAmountIrr, setNewSharedCostAmountIrr] = useState<string>("");
 
+  const [eventParticipantSearch, setEventParticipantSearch] = useState("");
+  const [eventParticipantOwnerUserId, setEventParticipantOwnerUserId] = useState("");
+  const [chargesPreviewPayorUserId, setChargesPreviewPayorUserId] = useState("");
+
   const overrideByParticipant = useMemo(() => {
     const m = new Map<string, string>();
     for (const o of overrides) m.set(o.participant_id, o.payor_user_id);
@@ -176,6 +181,19 @@ export default function AdminEventDetail() {
   const guestIds = useMemo(() => new Set(guests.map((g) => g.user_id)), [guests]);
 
   const hostIds = useMemo(() => new Set(hosts.map((h) => h.user_id)), [hosts]);
+
+  const userById = useMemo(() => {
+    const m = new Map<string, UserRow>();
+    for (const u of users) m.set(u.id, u);
+    return m;
+  }, [users]);
+
+  const userLabel = (id: string) => {
+    const u = userById.get(id);
+    if (!u) return id;
+    const contact = u.mobilePhone || u.email;
+    return contact ? `${u.displayName} (${contact})` : u.displayName;
+  };
 
   const payorBreakdowns = useMemo(() => {
     const pcs = chargesPreview?.participantCharges ?? [];
@@ -207,6 +225,32 @@ export default function AdminEventDetail() {
 
     return byPayor;
   }, [chargesPreview]);
+
+  const filteredEventParticipants = useMemo(() => {
+    const q = eventParticipantSearch.trim().toLowerCase();
+    return eventParticipants.filter((ep) => {
+      const p = participants.find((x) => x.id === ep.participant_id);
+      if (eventParticipantOwnerUserId && p?.owner_user_id !== eventParticipantOwnerUserId) return false;
+      if (!q) return true;
+      const name = (p?.display_name ?? "").toLowerCase();
+      return name.includes(q);
+    });
+  }, [eventParticipants, participants, eventParticipantSearch, eventParticipantOwnerUserId]);
+
+  const eventParticipantOwnerUserIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ep of eventParticipants) {
+      const p = participants.find((x) => x.id === ep.participant_id);
+      if (p?.owner_user_id) s.add(p.owner_user_id);
+    }
+    return [...s].sort((a, b) => userLabel(a).localeCompare(userLabel(b)));
+  }, [eventParticipants, participants, users]);
+
+  const filteredPayorSummaries = useMemo(() => {
+    const summaries = chargesPreview?.payorSummaries ?? [];
+    if (!chargesPreviewPayorUserId) return summaries;
+    return summaries.filter((ps) => ps.payorUserId === chargesPreviewPayorUserId);
+  }, [chargesPreview, chargesPreviewPayorUserId]);
 
   const load = async () => {
     if (!eventId) return;
@@ -454,11 +498,6 @@ export default function AdminEventDetail() {
   if (!event) {
     return <Alert severity="warning" sx={{ mt: 2 }}>{t("admin.events.detail.notFound")}</Alert>;
   }
-
-  const userLabel = (id: string) => {
-    const u = users.find((x) => x.id === id);
-    return u ? `${u.displayName} (${u.email})` : id;
-  };
 
   const allowedTargetStates = () => {
     return ["DRAFT", "OPEN", "LOCKED", "COMPLETED"];
@@ -708,8 +747,31 @@ export default function AdminEventDetail() {
             <Button variant="contained" size="small" onClick={addParticipantToEvent}>{t("admin.events.detail.addParticipant")}</Button>
           </Stack>
 
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+            <TextField
+              size="small"
+              label={t("admin.events.detail.searchParticipant", { defaultValue: "Search participant" })}
+              value={eventParticipantSearch}
+              onChange={(e) => setEventParticipantSearch(e.target.value)}
+              fullWidth
+            />
+            <FormControl size="small" sx={{ minWidth: 240 }}>
+              <InputLabel>{t("admin.events.detail.filterOwner", { defaultValue: "Filter owner" })}</InputLabel>
+              <Select
+                value={eventParticipantOwnerUserId}
+                label={t("admin.events.detail.filterOwner", { defaultValue: "Filter owner" })}
+                onChange={(e) => setEventParticipantOwnerUserId(e.target.value)}
+              >
+                <MenuItem value="">--</MenuItem>
+                {eventParticipantOwnerUserIds.map((uid) => (
+                  <MenuItem key={uid} value={uid}>{userLabel(uid)}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
           <Stack spacing={2}>
-            {eventParticipants.map((ep) => {
+            {filteredEventParticipants.map((ep) => {
               const participant = participants.find((p) => p.id === ep.participant_id);
               const overridePayor = overrideByParticipant.get(ep.participant_id) ?? "";
 
@@ -759,16 +821,34 @@ export default function AdminEventDetail() {
       <Card sx={{ mt: 3 }}>
         <CardHeader title={t("admin.events.detail.chargesPreview")} />
         <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 260 }}>
+              <InputLabel>{t("admin.events.detail.filterPayor", { defaultValue: "Filter payor" })}</InputLabel>
+              <Select
+                value={chargesPreviewPayorUserId}
+                label={t("admin.events.detail.filterPayor", { defaultValue: "Filter payor" })}
+                onChange={(e) => setChargesPreviewPayorUserId(e.target.value)}
+              >
+                <MenuItem value="">--</MenuItem>
+                {(chargesPreview?.payorSummaries ?? []).map((ps) => (
+                  <MenuItem key={ps.payorUserId} value={ps.payorUserId}>
+                    {userLabel(ps.payorUserId)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
           {(chargesPreview?.payorSummaries?.length ?? 0) === 0 ? (
             <Typography color="text.secondary">{t("admin.events.detail.noCharges")}</Typography>
           ) : (
             <Stack spacing={2}>
-              {chargesPreview!.payorSummaries.map((ps) => {
+              {filteredPayorSummaries.map((ps) => {
                 const bd = payorBreakdowns.get(ps.payorUserId) ?? { foodIrr: 0, sharedCostsIrr: 0, hostFeeIrr: 0 };
                 return (
                 <Card key={ps.payorUserId} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
-                    <Typography variant="subtitle2">{ps.payorEmail} — {ps.totalIrr.toLocaleString()} IRR</Typography>
+                    <Typography variant="subtitle2">{userLabel(ps.payorUserId)} — {ps.totalIrr.toLocaleString()} IRR</Typography>
                     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary">
                         {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {bd.foodIrr.toLocaleString()} IRR
