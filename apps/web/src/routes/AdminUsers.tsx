@@ -37,6 +37,12 @@ type UserRow = {
   createdAt: string;
 };
 
+const utcIsoToTimeHHmm = (iso: string) => {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function AdminUsers() {
   const { t } = useTranslation();
   const api = useApi();
@@ -156,7 +162,9 @@ export default function AdminUsers() {
                       <TableCell>{u.email}</TableCell>
                       <TableCell>{u.displayName}</TableCell>
                       <TableCell>{u.role}</TableCell>
-                      <TableCell>{utcIsoToJalaliDate(u.createdAt)}</TableCell>
+                      <TableCell>
+                        {utcIsoToJalaliDate(u.createdAt)} {utcIsoToTimeHHmm(u.createdAt)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
