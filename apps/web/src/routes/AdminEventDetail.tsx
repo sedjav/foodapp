@@ -119,6 +119,22 @@ type PayorSummary = {
   participants: { participantId: string; participantName: string; amountIrr: number }[];
 };
 
+type ParticipantCharge = {
+  participantId: string;
+  participantName: string;
+  payorUserId: string;
+  payorEmail: string;
+  totalIrr: number;
+  breakdown: {
+    selectionId: string;
+    itemName: string;
+    quantity: number;
+    unitPriceIrr: number;
+    shareCount: number;
+    shareAmountIrr: number;
+  }[];
+};
+
 export default function AdminEventDetail() {
   const { t } = useTranslation();
   const api = useApi();
@@ -134,7 +150,10 @@ export default function AdminEventDetail() {
   const [hosts, setHosts] = useState<HostRow[]>([]);
   const [sharedCosts, setSharedCosts] = useState<SharedCostRow[]>([]);
   const [charges, setCharges] = useState<ChargeRow[]>([]);
-  const [chargesPreview, setChargesPreview] = useState<PayorSummary[]>([]);
+  const [chargesPreview, setChargesPreview] = useState<{
+    participantCharges: ParticipantCharge[];
+    payorSummaries: PayorSummary[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,6 +176,49 @@ export default function AdminEventDetail() {
   const guestIds = useMemo(() => new Set(guests.map((g) => g.user_id)), [guests]);
 
   const hostIds = useMemo(() => new Set(hosts.map((h) => h.user_id)), [hosts]);
+
+  const payorBreakdowns = useMemo(() => {
+    const pcs = chargesPreview?.participantCharges ?? [];
+    const participantOwnerById = new Map<string, string>();
+    for (const p of participants) participantOwnerById.set(p.id, p.owner_user_id);
+
+    const isHostParticipant = (participantId: string) => {
+      const ownerId = participantOwnerById.get(participantId);
+      return ownerId ? hostIds.has(ownerId) : false;
+    };
+
+    const byPayor = new Map<
+      string,
+      {
+        foodIrr: number;
+        sharedCostsIrr: number;
+        hostParticipantsIrr: number;
+      }
+    >();
+
+    for (const pc of pcs) {
+      if (!byPayor.has(pc.payorUserId)) {
+        byPayor.set(pc.payorUserId, { foodIrr: 0, sharedCostsIrr: 0, hostParticipantsIrr: 0 });
+      }
+      const agg = byPayor.get(pc.payorUserId)!;
+
+      if (isHostParticipant(pc.participantId)) {
+        agg.hostParticipantsIrr += pc.totalIrr;
+      }
+
+      for (const b of pc.breakdown ?? []) {
+        const lineAmount = (b.shareAmountIrr ?? 0);
+        if (typeof lineAmount !== "number") continue;
+        if (String(b.selectionId).startsWith("shared:")) {
+          agg.sharedCostsIrr += lineAmount;
+        } else {
+          agg.foodIrr += lineAmount;
+        }
+      }
+    }
+
+    return byPayor;
+  }, [chargesPreview, participants, hostIds]);
 
   const load = async () => {
     if (!eventId) return;
@@ -193,8 +255,11 @@ export default function AdminEventDetail() {
       setCharges((await chargesRes.json()) as ChargeRow[]);
 
       const previewRes = await api.fetch(`/api/v1/admin/events/${eventId}/charges-preview`, { method: "GET" });
-      const previewData = (await previewRes.json()) as { payorSummaries: PayorSummary[] };
-      setChargesPreview(previewData.payorSummaries ?? []);
+      const previewData = (await previewRes.json()) as {
+        participantCharges: ParticipantCharge[];
+        payorSummaries: PayorSummary[];
+      };
+      setChargesPreview(previewData);
 
       if (!locationUserId) {
         setLocationUserId(ev.location_user_id ?? "");
@@ -692,20 +757,34 @@ export default function AdminEventDetail() {
       <Card sx={{ mt: 3 }}>
         <CardHeader title={t("admin.events.detail.chargesPreview")} />
         <CardContent>
-          {chargesPreview.length === 0 ? (
+          {(chargesPreview?.payorSummaries?.length ?? 0) === 0 ? (
             <Typography color="text.secondary">{t("admin.events.detail.noCharges")}</Typography>
           ) : (
             <Stack spacing={2}>
-              {chargesPreview.map((ps) => (
+              {chargesPreview!.payorSummaries.map((ps) => {
+                const bd = payorBreakdowns.get(ps.payorUserId) ?? { foodIrr: 0, sharedCostsIrr: 0, hostParticipantsIrr: 0 };
+                return (
                 <Card key={ps.payorUserId} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
                     <Typography variant="subtitle2">{ps.payorEmail} — {ps.totalIrr.toLocaleString()} IRR</Typography>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {bd.foodIrr.toLocaleString()} IRR
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t("admin.events.detail.breakdownSharedCosts", { defaultValue: "Shared costs" })}: {bd.sharedCostsIrr.toLocaleString()} IRR
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t("admin.events.detail.breakdownHost", { defaultValue: "Host participants" })}: {bd.hostParticipantsIrr.toLocaleString()} IRR
+                      </Typography>
+                    </Stack>
                     <Typography variant="caption" color="text.secondary">
                       {ps.participants.map((p) => `${p.participantName}: ${p.amountIrr.toLocaleString()}`).join(", ")}
                     </Typography>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </Stack>
           )}
         </CardContent>
