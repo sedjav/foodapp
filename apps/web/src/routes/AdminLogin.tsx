@@ -20,7 +20,7 @@ export default function AdminLogin() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
+  const [mobilePhone, setMobilePhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +31,7 @@ export default function AdminLogin() {
     setError(null);
 
     try {
-      await login(email, password);
+      await login(mobilePhone, password);
       navigate("/admin/users");
     } catch (err: any) {
       setError(err?.message ?? "Error");
@@ -49,9 +49,9 @@ export default function AdminLogin() {
             <Stack spacing={2}>
               <TextField
                 label={t("admin.login.email")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username"
+                value={mobilePhone}
+                onChange={(e) => setMobilePhone(e.target.value)}
+                autoComplete="tel"
                 fullWidth
                 size="small"
               />

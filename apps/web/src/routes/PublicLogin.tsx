@@ -18,7 +18,7 @@ export default function PublicLogin() {
   const { t } = useTranslation();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [mobilePhone, setMobilePhone] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export default function PublicLogin() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(mobilePhone, password);
     } catch (err: any) {
       setError(err?.message ?? "Error");
     } finally {
@@ -44,9 +44,9 @@ export default function PublicLogin() {
           <Stack spacing={2}>
             <TextField
               label={t("public.login.email")}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="username"
+              value={mobilePhone}
+              onChange={(e) => setMobilePhone(e.target.value)}
+              autoComplete="tel"
               fullWidth
               size="small"
             />

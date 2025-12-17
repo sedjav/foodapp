@@ -31,6 +31,7 @@ type UserRole = "ADMIN" | "USER";
 
 type UserRow = {
   id: string;
+  mobilePhone: string | null;
   email: string;
   displayName: string;
   role: UserRole;
@@ -52,7 +53,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [email, setEmail] = useState("");
+  const [mobilePhone, setMobilePhone] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("USER");
@@ -114,14 +115,14 @@ export default function AdminUsers() {
       await api.fetch("/api/v1/admin/users", {
         method: "POST",
         body: JSON.stringify({
-          email,
+          mobilePhone,
           displayName,
           password,
           role
         })
       });
 
-      setEmail("");
+      setMobilePhone("");
       setDisplayName("");
       setPassword("");
       setRole("USER");
@@ -159,7 +160,7 @@ export default function AdminUsers() {
                 <TableBody>
                   {rows.map((u) => (
                     <TableRow key={u.id} hover>
-                      <TableCell>{u.email}</TableCell>
+                      <TableCell>{u.mobilePhone ?? ""}</TableCell>
                       <TableCell>{u.displayName}</TableCell>
                       <TableCell>{u.role}</TableCell>
                       <TableCell>
@@ -185,8 +186,8 @@ export default function AdminUsers() {
                 <Stack spacing={2}>
                   <TextField
                     label={t("admin.users.email")}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={mobilePhone}
+                    onChange={(e) => setMobilePhone(e.target.value)}
                     fullWidth
                     size="small"
                   />
@@ -243,7 +244,7 @@ export default function AdminUsers() {
                       <MenuItem value="">--</MenuItem>
                       {rows.map((u) => (
                         <MenuItem key={u.id} value={u.id}>
-                          {u.displayName} ({u.email})
+                          {u.displayName} ({u.mobilePhone ?? u.email})
                         </MenuItem>
                       ))}
                     </Select>

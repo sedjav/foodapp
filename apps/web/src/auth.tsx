@@ -4,6 +4,7 @@ type UserRole = "ADMIN" | "USER";
 
 type Me = {
   id: string;
+  mobilePhone: string | null;
   email: string;
   displayName: string;
   role: UserRole;
@@ -14,7 +15,7 @@ type AuthContextValue = {
   token: string | null;
   me: Me | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (mobilePhone: string, password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -87,12 +88,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [token]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (mobilePhone: string, password: string) => {
     const res = await apiFetch(
       "/api/v1/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ mobilePhone, password })
       },
       null
     );

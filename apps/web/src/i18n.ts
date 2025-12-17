@@ -39,7 +39,7 @@ const resources = {
         },
         login: {
           title: "Admin Login",
-          email: "Email",
+          email: "Mobile phone",
           password: "Password",
           submit: "Login",
           submitting: "Logging in..."
@@ -47,7 +47,7 @@ const resources = {
         users: {
           title: "Users",
           loading: "Loading users...",
-          email: "Email",
+          email: "Mobile phone",
           name: "Name",
           role: "Role",
           createdAt: "Created",
@@ -178,7 +178,7 @@ const resources = {
         loading: "Loading...",
         login: {
           title: "Login",
-          email: "Email",
+          email: "Mobile phone",
           password: "Password",
           submit: "Login",
           submitting: "Logging in..."
@@ -297,7 +297,7 @@ const resources = {
         },
         login: {
           title: "ورود ادمین",
-          email: "ایمیل",
+          email: "موبایل",
           password: "رمز عبور",
           submit: "ورود",
           submitting: "در حال ورود..."
@@ -305,7 +305,7 @@ const resources = {
         users: {
           title: "کاربران",
           loading: "در حال بارگذاری کاربران...",
-          email: "ایمیل",
+          email: "موبایل",
           name: "نام",
           role: "نقش",
           createdAt: "تاریخ ایجاد",
@@ -436,7 +436,7 @@ const resources = {
         loading: "در حال بارگذاری...",
         login: {
           title: "ورود",
-          email: "ایمیل",
+          email: "موبایل",
           password: "رمز عبور",
           submit: "ورود",
           submitting: "در حال ورود..."

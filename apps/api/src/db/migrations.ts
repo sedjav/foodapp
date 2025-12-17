@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 
 import type { DatabaseSchema } from "./types.js";
 
@@ -453,6 +453,22 @@ export const migrations: Migration[] = [
           })
           .execute();
       }
+    }
+  },
+  {
+    id: "007_users_mobile_phone",
+    up: async (db) => {
+      await db.schema.alterTable("users").addColumn("mobile_phone", "text").execute();
+
+      await db
+        .updateTable("users")
+        .set({
+          mobile_phone: sql.ref("email")
+        } as any)
+        .where(sql<boolean>`mobile_phone is null`)
+        .execute();
+
+      await db.schema.createIndex("users_mobile_phone_uq").on("users").column("mobile_phone").unique().execute();
     }
   }
 ];

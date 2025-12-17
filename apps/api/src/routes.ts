@@ -43,15 +43,16 @@ const parseTagsJson = (tagsJson: unknown): string[] => {
 
 export const registerRoutes = (app: FastifyInstance, db: Db) => {
   app.post("/api/v1/auth/login", async (req: FastifyRequest, reply: FastifyReply) => {
-    const body = req.body as { email?: string; password?: string };
-    if (!body?.email || !body?.password) {
-      return reply.status(400).send({ message: "email and password are required" });
+    const body = req.body as { mobilePhone?: string; email?: string; password?: string };
+    const mobilePhone = (body?.mobilePhone ?? body?.email)?.trim();
+    if (!mobilePhone || !body?.password) {
+      return reply.status(400).send({ message: "mobilePhone and password are required" });
     }
 
     const user = await db
       .selectFrom("users")
-      .select(["id", "email", "display_name", "password_hash", "role"])
-      .where("email", "=", body.email)
+      .select(["id", "email", "mobile_phone", "display_name", "password_hash", "role"])
+      .where("mobile_phone", "=", mobilePhone)
       .executeTakeFirst();
 
     if (!user) return reply.status(401).send({ message: "invalid credentials" });
@@ -65,6 +66,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
       token,
       user: {
         id: user.id,
+        mobilePhone: (user as any).mobile_phone,
         email: user.email,
         displayName: user.display_name,
         role: user.role
@@ -77,7 +79,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
 
     const user = await db
       .selectFrom("users")
-      .select(["id", "email", "display_name", "role", "created_at"])
+      .select(["id", "email", "mobile_phone", "display_name", "role", "created_at"])
       .where("id", "=", auth.sub)
       .executeTakeFirst();
 
@@ -85,6 +87,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
 
     return {
       id: user.id,
+      mobilePhone: (user as any).mobile_phone,
       email: user.email,
       displayName: user.display_name,
       role: user.role,
@@ -708,12 +711,13 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
 
     const users = await db
       .selectFrom("users")
-      .select(["id", "email", "display_name", "role", "created_at"])
+      .select(["id", "email", "mobile_phone", "display_name", "role", "created_at"])
       .orderBy("created_at", "desc")
       .execute();
 
     return users.map((u: any) => ({
       id: u.id,
+      mobilePhone: u.mobile_phone,
       email: u.email,
       displayName: u.display_name,
       role: u.role,
@@ -725,27 +729,39 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
     await requireAdmin(app, req);
 
     const body = req.body as {
+      mobilePhone?: string;
       email?: string;
       displayName?: string;
       password?: string;
       role?: UserRole;
     };
 
-    const email = body?.email?.trim();
+    const mobilePhone = body?.mobilePhone?.trim();
     const displayName = body?.displayName?.trim();
     const password = body?.password;
     const role: UserRole = body?.role ?? "USER";
 
-    if (!email || !displayName || !password) {
-      return reply.status(400).send({ message: "email, displayName, and password are required" });
+    if (!mobilePhone || !displayName || !password) {
+      return reply.status(400).send({ message: "mobilePhone, displayName, and password are required" });
     }
+
+    const email = (body?.email?.trim() ?? mobilePhone).trim();
 
     if (role !== "ADMIN" && role !== "USER") {
       return reply.status(400).send({ message: "invalid role" });
     }
 
-    const existing = await db.selectFrom("users").select(["id"]).where("email", "=", email).executeTakeFirst();
+    const existing = await db
+      .selectFrom("users")
+      .select(["id"])
+      .where("mobile_phone", "=", mobilePhone)
+      .executeTakeFirst();
     if (existing) {
+      return reply.status(409).send({ message: "mobilePhone already exists" });
+    }
+
+    const existingEmail = await db.selectFrom("users").select(["id"]).where("email", "=", email).executeTakeFirst();
+    if (existingEmail) {
       return reply.status(409).send({ message: "email already exists" });
     }
 
@@ -758,6 +774,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
       .values({
         id,
         email,
+        mobile_phone: mobilePhone,
         display_name: displayName,
         password_hash: passwordHash,
         role,
@@ -776,6 +793,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
 
     return reply.status(201).send({
       id,
+      mobilePhone,
       email,
       displayName,
       role,

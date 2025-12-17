@@ -15,12 +15,13 @@ export const verifyPassword = async (password: string, hash: string) => {
 
 export const ensureInitialAdmin = async (db: Db) => {
   const email = process.env.INITIAL_ADMIN_EMAIL;
+  const mobilePhone = (process.env.INITIAL_ADMIN_MOBILE_PHONE ?? email)?.trim();
   const password = process.env.INITIAL_ADMIN_PASSWORD;
   const displayName = process.env.INITIAL_ADMIN_DISPLAY_NAME ?? "Admin";
 
-  if (!email || !password) return;
+  if (!email || !password || !mobilePhone) return;
 
-  const existing = await db.selectFrom("users").select(["id"]).where("email", "=", email).executeTakeFirst();
+  const existing = await db.selectFrom("users").select(["id"]).where("mobile_phone", "=", mobilePhone).executeTakeFirst();
   if (existing) return;
 
   const now = new Date().toISOString();
@@ -33,6 +34,7 @@ export const ensureInitialAdmin = async (db: Db) => {
     .values({
       id,
       email,
+      mobile_phone: mobilePhone,
       display_name: displayName,
       password_hash: passwordHash,
       role,

@@ -11,6 +11,7 @@ export type PaymentLinkStatus = "OPEN" | "PAID" | "VOID";
 export interface UsersTable {
   id: string;
   email: string;
+  mobile_phone: string | null;
   display_name: string;
   password_hash: string;
   role: UserRole;
