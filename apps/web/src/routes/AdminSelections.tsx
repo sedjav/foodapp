@@ -95,6 +95,9 @@ export default function AdminSelections() {
   const [existingMenuName, setExistingMenuName] = useState("");
   const [existingFoodName, setExistingFoodName] = useState("");
 
+  const [allocateeSearch, setAllocateeSearch] = useState("");
+  const [allocateeOwnerUserId, setAllocateeOwnerUserId] = useState("");
+
   const participantLabel = (pid: string) => {
     const p = participants.find((x) => x.id === pid);
     return p ? p.display_name : pid;
@@ -133,6 +136,25 @@ export default function AdminSelections() {
       .filter((pid) => !selected.has(pid))
       .sort((a, b) => participantLabel(a).localeCompare(participantLabel(b)));
   }, [attendingParticipantIds, selections, participants]);
+
+  const allocateeOwnerUserIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const pid of unselectedAttendingParticipantIds) {
+      const p = participants.find((x) => x.id === pid);
+      if (p?.owner_user_id) s.add(p.owner_user_id);
+    }
+    return [...s].sort((a, b) => userLabel(a).localeCompare(userLabel(b)));
+  }, [unselectedAttendingParticipantIds, participants, users]);
+
+  const filteredAllocateeIds = useMemo(() => {
+    const q = allocateeSearch.trim().toLowerCase();
+    return unselectedAttendingParticipantIds.filter((pid) => {
+      const p = participants.find((x) => x.id === pid);
+      if (allocateeOwnerUserId && p?.owner_user_id !== allocateeOwnerUserId) return false;
+      if (!q) return true;
+      return (p?.display_name ?? "").toLowerCase().includes(q);
+    });
+  }, [unselectedAttendingParticipantIds, participants, allocateeSearch, allocateeOwnerUserId]);
 
   const load = async () => {
     if (!eventId) return;
@@ -339,20 +361,40 @@ export default function AdminSelections() {
 
                 <Box>
                   <Typography variant="body2" sx={{ mb: 1 }}>{t("admin.selections.allocateTo")}</Typography>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1 }}>
+                    <TextField
+                      size="small"
+                      label={t("admin.selections.searchAllocatee", { defaultValue: "Search" })}
+                      value={allocateeSearch}
+                      onChange={(e) => setAllocateeSearch(e.target.value)}
+                      fullWidth
+                    />
+                    <FormControl size="small" sx={{ minWidth: 220 }}>
+                      <InputLabel>{t("admin.selections.filterAllocateeOwner", { defaultValue: "Owner" })}</InputLabel>
+                      <Select
+                        value={allocateeOwnerUserId}
+                        label={t("admin.selections.filterAllocateeOwner", { defaultValue: "Owner" })}
+                        onChange={(e) => setAllocateeOwnerUserId(e.target.value)}
+                      >
+                        <MenuItem value="">--</MenuItem>
+                        {allocateeOwnerUserIds.map((uid) => (
+                          <MenuItem key={uid} value={uid}>{userLabel(uid)}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
                   <Stack spacing={0.5}>
-                    {eventParticipants
-                      .filter((ep) => attendingParticipantIds.has(ep.participant_id))
-                      .map((ep) => (
+                    {filteredAllocateeIds.map((pid) => (
                         <FormControlLabel
-                          key={ep.participant_id}
+                          key={pid}
                           control={
                             <Checkbox
                               size="small"
-                              checked={!!selectedParticipantIds[ep.participant_id]}
-                              onChange={() => toggleParticipant(ep.participant_id)}
+                              checked={!!selectedParticipantIds[pid]}
+                              onChange={() => toggleParticipant(pid)}
                             />
                           }
-                          label={participantLabel(ep.participant_id)}
+                          label={participantLabel(pid)}
                         />
                       ))}
                   </Stack>

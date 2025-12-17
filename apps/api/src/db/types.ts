@@ -7,6 +7,7 @@ export type ShareType = "EQUAL" | "WEIGHTED";
 export type SharedCostSplitMethod = "EQUAL_ALL_ATTENDING";
 export type WalletTransactionType = "TOPUP" | "EVENT_CHARGE" | "ADJUSTMENT" | "REFUND";
 export type PaymentLinkStatus = "OPEN" | "PAID" | "VOID";
+export type PayorPaymentStatus = "UNPAID" | "PAID";
 
 export interface UsersTable {
   id: string;
@@ -186,6 +187,13 @@ export interface PaymentLinksTable {
   created_at: string;
 }
 
+export interface EventPayorPaymentStatusesTable {
+  event_id: string;
+  payor_user_id: string;
+  status: PayorPaymentStatus;
+  updated_at: string;
+}
+
 export interface SchemaMigrationsTable {
   id: string;
   created_at: string;
@@ -213,5 +221,6 @@ export interface DatabaseSchema {
   selection_allocations: SelectionAllocationsTable;
   event_charges: EventChargesTable;
   payment_links: PaymentLinksTable;
+  event_payor_payment_statuses: EventPayorPaymentStatusesTable;
   schema_migrations: SchemaMigrationsTable;
 }

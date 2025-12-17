@@ -120,6 +120,13 @@ type PayorSummary = {
   participants: { participantId: string; participantName: string; amountIrr: number }[];
 };
 
+type PayorPaymentStatusRow = {
+  event_id: string;
+  payor_user_id: string;
+  status: "PAID" | "UNPAID";
+  updated_at: string;
+};
+
 type ParticipantCharge = {
   participantId: string;
   participantName: string;
@@ -189,7 +196,10 @@ export default function AdminEventDetail() {
 
   const [eventParticipantSearch, setEventParticipantSearch] = useState("");
   const [eventParticipantOwnerUserId, setEventParticipantOwnerUserId] = useState("");
+  const [eventParticipantAttendanceStatus, setEventParticipantAttendanceStatus] = useState("");
   const [chargesPreviewPayorUserId, setChargesPreviewPayorUserId] = useState("");
+  const [chargesPreviewPaymentStatus, setChargesPreviewPaymentStatus] = useState<"" | "PAID" | "UNPAID">("");
+  const [payorPaymentStatuses, setPayorPaymentStatuses] = useState<Record<string, "PAID" | "UNPAID">>({});
 
   const overrideByParticipant = useMemo(() => {
     const m = new Map<string, string>();
@@ -212,6 +222,20 @@ export default function AdminEventDetail() {
     if (!u) return id;
     const contact = u.mobilePhone || u.email;
     return contact ? `${u.displayName} (${contact})` : u.displayName;
+  };
+
+  const setPayorPaymentStatus = async (payorUserId: string, status: "PAID" | "UNPAID") => {
+    if (!eventId) return;
+    setError(null);
+    try {
+      await api.fetch(`/api/v1/admin/events/${eventId}/payor-payment-statuses/${payorUserId}`, {
+        method: "PUT",
+        body: JSON.stringify({ status })
+      });
+      setPayorPaymentStatuses((prev) => ({ ...prev, [payorUserId]: status }));
+    } catch (err: any) {
+      setError(err?.message ?? "Error");
+    }
   };
 
   const payorBreakdowns = useMemo(() => {
@@ -245,16 +269,106 @@ export default function AdminEventDetail() {
     return byPayor;
   }, [chargesPreview]);
 
+  const chargesPreviewCombined = useMemo(() => {
+    let foodIrr = 0;
+    let sharedCostsIrr = 0;
+    let hostFeeIrr = 0;
+
+    for (const v of payorBreakdowns.values()) {
+      foodIrr += Number(v.foodIrr ?? 0) || 0;
+      sharedCostsIrr += Number(v.sharedCostsIrr ?? 0) || 0;
+      hostFeeIrr += Number(v.hostFeeIrr ?? 0) || 0;
+    }
+
+    return {
+      foodIrr,
+      sharedCostsIrr,
+      hostFeeIrr,
+      totalIrr: foodIrr + sharedCostsIrr + hostFeeIrr
+    };
+  }, [payorBreakdowns]);
+
+  const payorChargeStatus = (payorUserId: string): "PAID" | "UNPAID" => {
+    return payorPaymentStatuses[payorUserId] ?? "UNPAID";
+  };
+
+  const filteredPayorSummaries = useMemo(() => {
+    const summaries = chargesPreview?.payorSummaries ?? [];
+
+    return summaries.filter((ps) => {
+      if (chargesPreviewPayorUserId && ps.payorUserId !== chargesPreviewPayorUserId) return false;
+      if (chargesPreviewPaymentStatus && payorChargeStatus(ps.payorUserId) !== chargesPreviewPaymentStatus) return false;
+      return true;
+    });
+  }, [chargesPreview, chargesPreviewPayorUserId, chargesPreviewPaymentStatus, payorPaymentStatuses]);
+
+  const filteredPayorUserIds = useMemo(() => {
+    return new Set<string>((filteredPayorSummaries ?? []).map((x) => x.payorUserId));
+  }, [filteredPayorSummaries]);
+
+  const chargesPreviewCombinedFiltered = useMemo(() => {
+    let foodIrr = 0;
+    let sharedCostsIrr = 0;
+    let hostFeeIrr = 0;
+
+    for (const [payorUserId, v] of payorBreakdowns.entries()) {
+      if (!filteredPayorUserIds.has(payorUserId)) continue;
+      foodIrr += Number(v.foodIrr ?? 0) || 0;
+      sharedCostsIrr += Number(v.sharedCostsIrr ?? 0) || 0;
+      hostFeeIrr += Number(v.hostFeeIrr ?? 0) || 0;
+    }
+
+    return {
+      foodIrr,
+      sharedCostsIrr,
+      hostFeeIrr,
+      totalIrr: foodIrr + sharedCostsIrr + hostFeeIrr
+    };
+  }, [payorBreakdowns, filteredPayorUserIds]);
+
+  const chargesPreviewCollectedTotalIrr = useMemo(() => {
+    let total = 0;
+    for (const ps of filteredPayorSummaries ?? []) {
+      total += Number(ps.totalIrr ?? 0) || 0;
+    }
+    return total;
+  }, [filteredPayorSummaries]);
+
+  const eventFoodSubtotalIrr = useMemo(() => {
+    let total = 0;
+    for (const s of selections) {
+      total += (Number(s.quantity ?? 0) || 0) * (Number(s.item_price_irr ?? 0) || 0);
+    }
+    return total;
+  }, [selections]);
+
+  const eventSharedCostsSubtotalIrr = useMemo(() => {
+    let total = 0;
+    for (const sc of sharedCosts) {
+      total += Number(sc.amount_irr ?? 0) || 0;
+    }
+    return total;
+  }, [sharedCosts]);
+
   const filteredEventParticipants = useMemo(() => {
     const q = eventParticipantSearch.trim().toLowerCase();
     return eventParticipants.filter((ep) => {
+      if (eventParticipantAttendanceStatus && ep.attendance_status !== eventParticipantAttendanceStatus) return false;
       const p = participants.find((x) => x.id === ep.participant_id);
       if (eventParticipantOwnerUserId && p?.owner_user_id !== eventParticipantOwnerUserId) return false;
       if (!q) return true;
       const name = (p?.display_name ?? "").toLowerCase();
       return name.includes(q);
     });
-  }, [eventParticipants, participants, eventParticipantSearch, eventParticipantOwnerUserId]);
+  }, [eventParticipants, participants, eventParticipantSearch, eventParticipantOwnerUserId, eventParticipantAttendanceStatus]);
+
+  const eventParticipantAttendanceStatuses = useMemo(() => {
+    const s = new Set<string>();
+    for (const ep of eventParticipants) {
+      if (ep?.attendance_status) s.add(ep.attendance_status);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [eventParticipants]);
 
   const eventParticipantOwnerUserIds = useMemo(() => {
     const s = new Set<string>();
@@ -265,23 +379,17 @@ export default function AdminEventDetail() {
     return [...s].sort((a, b) => userLabel(a).localeCompare(userLabel(b)));
   }, [eventParticipants, participants, users]);
 
-  const filteredPayorSummaries = useMemo(() => {
-    const summaries = chargesPreview?.payorSummaries ?? [];
-    if (!chargesPreviewPayorUserId) return summaries;
-    return summaries.filter((ps) => ps.payorUserId === chargesPreviewPayorUserId);
-  }, [chargesPreview, chargesPreviewPayorUserId]);
-
   const orderSummaryItems = useMemo(() => {
-    const byItem = new Map<string, { itemName: string; quantity: number }>();
+    const byItem = new Map<string, { itemName: string; quantity: number; unitPriceIrr: number }>();
 
     const scopedSelections = orderSummaryMenuName
       ? selections.filter((s) => s.menu_name === orderSummaryMenuName)
       : selections;
 
     for (const s of scopedSelections) {
-      const key = String(s.item_name || "");
+      const key = s.menu_item_id || String(s.item_name || "");
       if (!byItem.has(key)) {
-        byItem.set(key, { itemName: s.item_name, quantity: 0 });
+        byItem.set(key, { itemName: s.item_name, quantity: 0, unitPriceIrr: Number(s.item_price_irr ?? 0) || 0 });
       }
       const agg = byItem.get(key)!;
       agg.quantity += Number(s.quantity ?? 0) || 0;
@@ -291,6 +399,21 @@ export default function AdminEventDetail() {
       return (a.itemName || "").localeCompare(b.itemName || "");
     });
   }, [selections, orderSummaryMenuName]);
+
+  const orderSummaryTotalQuantity = useMemo(() => {
+    let total = 0;
+    for (const x of orderSummaryItems) total += Number(x.quantity ?? 0) || 0;
+    return total;
+  }, [orderSummaryItems]);
+
+  const orderSummarySubtotalIrr = useMemo(() => {
+    let total = 0;
+    for (const x of orderSummaryItems) {
+      const lineTotal = (Number(x.quantity ?? 0) || 0) * (Number(x.unitPriceIrr ?? 0) || 0);
+      total += lineTotal;
+    }
+    return total;
+  }, [orderSummaryItems]);
 
   const orderSummaryMenuNames = useMemo(() => {
     const s = new Set<string>();
@@ -307,7 +430,19 @@ export default function AdminEventDetail() {
     setError(null);
 
     try {
-      const [evRes, usersRes, guestsRes, hostsRes, sharedCostsRes, menusRes, participantsRes, eventParticipantsRes, overridesRes, selectionsRes] = await Promise.all([
+      const [
+        evRes,
+        usersRes,
+        guestsRes,
+        hostsRes,
+        sharedCostsRes,
+        menusRes,
+        participantsRes,
+        eventParticipantsRes,
+        overridesRes,
+        selectionsRes,
+        payorStatusesRes
+      ] = await Promise.all([
         api.fetch(`/api/v1/admin/events/${eventId}`, { method: "GET" }),
         api.fetch("/api/v1/admin/users", { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/guests`, { method: "GET" }),
@@ -317,7 +452,8 @@ export default function AdminEventDetail() {
         api.fetch("/api/v1/admin/participants", { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/participants`, { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/payor-overrides`, { method: "GET" }),
-        api.fetch(`/api/v1/admin/events/${eventId}/selections`, { method: "GET" })
+        api.fetch(`/api/v1/admin/events/${eventId}/selections`, { method: "GET" }),
+        api.fetch(`/api/v1/admin/events/${eventId}/payor-payment-statuses`, { method: "GET" })
       ]);
 
       const ev = (await evRes.json()) as EventRow;
@@ -332,6 +468,13 @@ export default function AdminEventDetail() {
       setEventParticipants((await eventParticipantsRes.json()) as EventParticipantRow[]);
       setOverrides((await overridesRes.json()) as PayorOverrideRow[]);
       setSelections((await selectionsRes.json()) as SelectionRow[]);
+
+      const statusRows = (await payorStatusesRes.json()) as PayorPaymentStatusRow[];
+      const statusMap: Record<string, "PAID" | "UNPAID"> = {};
+      for (const r of statusRows) {
+        statusMap[r.payor_user_id] = r.status;
+      }
+      setPayorPaymentStatuses(statusMap);
 
       const chargesRes = await api.fetch(`/api/v1/admin/events/${eventId}/charges`, { method: "GET" });
       setCharges((await chargesRes.json()) as ChargeRow[]);
@@ -758,7 +901,14 @@ export default function AdminEventDetail() {
       </Stack>
 
       <Card sx={{ mt: 3 }}>
-        <CardHeader title={t("admin.events.detail.orderSummary", { defaultValue: "Order Summary" })} />
+        <CardHeader
+          title={t("admin.events.detail.orderSummary", { defaultValue: "Order Summary" })}
+          subheader={t("admin.events.detail.orderSummaryCount", {
+            defaultValue: "{{items}} item(s), {{qty}} total",
+            items: orderSummaryItems.length,
+            qty: orderSummaryTotalQuantity
+          })}
+        />
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
             <FormControl size="small" sx={{ minWidth: 240 }}>
@@ -784,9 +934,13 @@ export default function AdminEventDetail() {
             <Stack spacing={0.5}>
               {orderSummaryItems.map((x) => (
                 <Typography key={x.itemName} variant="body2">
-                  {x.itemName} × {x.quantity}
+                  {x.itemName} × {x.quantity} × {x.unitPriceIrr.toLocaleString()} = {(x.quantity * x.unitPriceIrr).toLocaleString()}
                 </Typography>
               ))}
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="subtitle2">
+                {t("admin.events.detail.orderSummarySubtotal", { defaultValue: "Subtotal" })}: {orderSummarySubtotalIrr.toLocaleString()}
+              </Typography>
             </Stack>
           )}
         </CardContent>
@@ -795,6 +949,11 @@ export default function AdminEventDetail() {
       <Card sx={{ mt: 3 }}>
         <CardHeader
           title={t("admin.events.detail.eventParticipants")}
+          subheader={t("admin.events.detail.eventParticipantsCount", {
+            defaultValue: "Showing {{shown}} of {{total}}",
+            shown: filteredEventParticipants.length,
+            total: eventParticipants.length
+          })}
           action={
             <Link component={RouterLink} to={`/admin/events/${event.id}/selections`} underline="hover">
               {t("admin.events.detail.manageSelections")}
@@ -853,6 +1012,19 @@ export default function AdminEventDetail() {
                 ))}
               </Select>
             </FormControl>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>{t("admin.events.detail.filterAttendance", { defaultValue: "Attendance" })}</InputLabel>
+              <Select
+                value={eventParticipantAttendanceStatus}
+                label={t("admin.events.detail.filterAttendance", { defaultValue: "Attendance" })}
+                onChange={(e) => setEventParticipantAttendanceStatus(e.target.value)}
+              >
+                <MenuItem value="">--</MenuItem>
+                {eventParticipantAttendanceStatuses.map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Stack>
 
           <Stack spacing={2}>
@@ -906,6 +1078,44 @@ export default function AdminEventDetail() {
       <Card sx={{ mt: 3 }}>
         <CardHeader title={t("admin.events.detail.chargesPreview")} />
         <CardContent>
+          <Card variant="outlined" sx={{ mb: 2 }}>
+            <CardContent sx={{ py: 1.5 }}>
+              <Typography variant="subtitle2">
+                {t("admin.events.detail.chargesPreviewCombined", { defaultValue: "Combined totals" })}
+              </Typography>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {chargesPreviewCombinedFiltered.foodIrr.toLocaleString()} IRR
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.breakdownSharedCosts", { defaultValue: "Shared costs" })}: {chargesPreviewCombinedFiltered.sharedCostsIrr.toLocaleString()} IRR
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.breakdownHostFee", { defaultValue: "Host fee" })}: {chargesPreviewCombinedFiltered.hostFeeIrr.toLocaleString()} IRR
+                </Typography>
+              </Stack>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.chargesPreviewCollected", { defaultValue: "Collected from payors" })}: {chargesPreviewCollectedTotalIrr.toLocaleString()} IRR
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.chargesPreviewCombinedTotal", { defaultValue: "Charged total" })}: {chargesPreviewCombinedFiltered.totalIrr.toLocaleString()} IRR
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.chargesPreviewDiscrepancy", { defaultValue: "Discrepancy" })}: {(chargesPreviewCollectedTotalIrr - chargesPreviewCombinedFiltered.totalIrr).toLocaleString()} IRR
+                </Typography>
+              </Stack>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.orderSummarySubtotal", { defaultValue: "Subtotal" })}: {(eventFoodSubtotalIrr + eventSharedCostsSubtotalIrr).toLocaleString()} IRR
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t("admin.events.detail.chargesPreviewExpectedVsCollected", { defaultValue: "Expected - collected" })}: {((eventFoodSubtotalIrr + eventSharedCostsSubtotalIrr) - chargesPreviewCollectedTotalIrr).toLocaleString()} IRR
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
             <FormControl size="small" sx={{ minWidth: 260 }}>
               <InputLabel>{t("admin.events.detail.filterPayor", { defaultValue: "Filter payor" })}</InputLabel>
@@ -922,6 +1132,18 @@ export default function AdminEventDetail() {
                 ))}
               </Select>
             </FormControl>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>{t("admin.events.detail.filterPaymentStatus", { defaultValue: "Payment" })}</InputLabel>
+              <Select
+                value={chargesPreviewPaymentStatus}
+                label={t("admin.events.detail.filterPaymentStatus", { defaultValue: "Payment" })}
+                onChange={(e) => setChargesPreviewPaymentStatus(e.target.value as any)}
+              >
+                <MenuItem value="">--</MenuItem>
+                <MenuItem value="UNPAID">{t("admin.events.detail.unpaid", { defaultValue: "Unpaid" })}</MenuItem>
+                <MenuItem value="PAID">{t("admin.events.detail.paid", { defaultValue: "Paid" })}</MenuItem>
+              </Select>
+            </FormControl>
           </Stack>
 
           {(chargesPreview?.payorSummaries?.length ?? 0) === 0 ? (
@@ -933,7 +1155,20 @@ export default function AdminEventDetail() {
                 return (
                 <Card key={ps.payorUserId} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
-                    <Typography variant="subtitle2">{userLabel(ps.payorUserId)} — {ps.totalIrr.toLocaleString()} IRR</Typography>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between" alignItems={{ md: "center" }}>
+                      <Typography variant="subtitle2">{userLabel(ps.payorUserId)} — {ps.totalIrr.toLocaleString()} IRR</Typography>
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel>{t("admin.events.detail.paymentStatus", { defaultValue: "Payment" })}</InputLabel>
+                        <Select
+                          value={payorChargeStatus(ps.payorUserId)}
+                          label={t("admin.events.detail.paymentStatus", { defaultValue: "Payment" })}
+                          onChange={(e) => void setPayorPaymentStatus(ps.payorUserId, e.target.value as any)}
+                        >
+                          <MenuItem value="UNPAID">{t("admin.events.detail.unpaid", { defaultValue: "Unpaid" })}</MenuItem>
+                          <MenuItem value="PAID">{t("admin.events.detail.paid", { defaultValue: "Paid" })}</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Stack>
                     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary">
                         {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {bd.foodIrr.toLocaleString()} IRR

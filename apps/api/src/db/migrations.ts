@@ -470,5 +470,33 @@ export const migrations: Migration[] = [
 
       await db.schema.createIndex("users_mobile_phone_uq").on("users").column("mobile_phone").unique().execute();
     }
+  },
+  {
+    id: "008_event_payor_payment_statuses",
+    up: async (db) => {
+      await db.schema
+        .createTable("event_payor_payment_statuses")
+        .ifNotExists()
+        .addColumn("event_id", "text", (col: any) => col.notNull())
+        .addColumn("payor_user_id", "text", (col: any) => col.notNull())
+        .addColumn("status", "text", (col: any) => col.notNull())
+        .addColumn("updated_at", "text", (col: any) => col.notNull())
+        .addPrimaryKeyConstraint("event_payor_payment_statuses_pk", ["event_id", "payor_user_id"])
+        .addForeignKeyConstraint(
+          "event_payor_payment_statuses_event_id_fk",
+          ["event_id"],
+          "events",
+          ["id"],
+          (cb: any) => cb.onDelete("cascade")
+        )
+        .addForeignKeyConstraint(
+          "event_payor_payment_statuses_payor_user_id_fk",
+          ["payor_user_id"],
+          "users",
+          ["id"],
+          (cb: any) => cb.onDelete("restrict")
+        )
+        .execute();
+    }
   }
 ];

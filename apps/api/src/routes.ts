@@ -263,6 +263,22 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
         return { status: 400 as const, body: { message: "link is not open" } };
       }
 
+      await trx
+        .deleteFrom("event_payor_payment_statuses")
+        .where("event_id", "=", (link as any).event_id)
+        .where("payor_user_id", "=", (link as any).payor_user_id)
+        .execute();
+
+      await trx
+        .insertInto("event_payor_payment_statuses")
+        .values({
+          event_id: (link as any).event_id,
+          payor_user_id: (link as any).payor_user_id,
+          status: "PAID" as any,
+          updated_at: now
+        })
+        .execute();
+
       const wallet = await trx
         .selectFrom("wallets")
         .select(["balance_irr"])
@@ -1735,6 +1751,50 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
     return result;
   });
 
+  app.get("/api/v1/admin/events/:eventId/payor-payment-statuses", async (req: FastifyRequest) => {
+    await requireAdmin(app, req);
+    const { eventId } = req.params as { eventId: string };
+    return db
+      .selectFrom("event_payor_payment_statuses")
+      .select(["event_id", "payor_user_id", "status", "updated_at"])
+      .where("event_id", "=", eventId)
+      .execute();
+  });
+
+  app.put(
+    "/api/v1/admin/events/:eventId/payor-payment-statuses/:payorUserId",
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      await requireAdmin(app, req);
+      const { eventId, payorUserId } = req.params as { eventId: string; payorUserId: string };
+      const body = req.body as { status?: "PAID" | "UNPAID" };
+      const status = body?.status;
+      if (status !== "PAID" && status !== "UNPAID") {
+        return reply.status(400).send({ message: "status must be PAID or UNPAID" });
+      }
+
+      const now = new Date().toISOString();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom("event_payor_payment_statuses")
+          .where("event_id", "=", eventId)
+          .where("payor_user_id", "=", payorUserId)
+          .execute();
+
+        await trx
+          .insertInto("event_payor_payment_statuses")
+          .values({
+            event_id: eventId,
+            payor_user_id: payorUserId,
+            status: status as any,
+            updated_at: now
+          })
+          .execute();
+      });
+
+      return reply.send({ ok: true });
+    }
+  );
+
   app.post("/api/v1/admin/events/:eventId/transition", async (req: FastifyRequest, reply: FastifyReply) => {
     await requireAdmin(app, req);
     const { eventId } = req.params as { eventId: string };
@@ -1832,6 +1892,7 @@ export const registerRoutes = (app: FastifyInstance, db: Db) => {
 
       await db.deleteFrom("event_charges").where("event_id", "=", eventId).execute();
       await db.deleteFrom("payment_links").where("event_id", "=", eventId).execute();
+      await db.deleteFrom("event_payor_payment_statuses").where("event_id", "=", eventId).execute();
     }
 
     if (targetState === "LOCKED" || targetState === "COMPLETED") {
