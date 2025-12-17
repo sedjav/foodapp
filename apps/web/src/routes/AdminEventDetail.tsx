@@ -136,6 +136,22 @@ type ParticipantCharge = {
   }[];
 };
 
+type SelectionRow = {
+  id: string;
+  event_id: string;
+  menu_item_id: string;
+  quantity: number;
+  created_by_user_id: string;
+  note: string | null;
+  created_at: string;
+  item_name: string;
+  item_price_irr: number;
+  menu_name: string;
+  category_name_en: string | null;
+  category_name_fa: string | null;
+  allocations: { participant_id: string }[];
+};
+
 export default function AdminEventDetail() {
   const { t } = useTranslation();
   const api = useApi();
@@ -151,6 +167,7 @@ export default function AdminEventDetail() {
   const [hosts, setHosts] = useState<HostRow[]>([]);
   const [sharedCosts, setSharedCosts] = useState<SharedCostRow[]>([]);
   const [charges, setCharges] = useState<ChargeRow[]>([]);
+  const [selections, setSelections] = useState<SelectionRow[]>([]);
   const [chargesPreview, setChargesPreview] = useState<{
     participantCharges: ParticipantCharge[];
     payorSummaries: PayorSummary[];
@@ -167,6 +184,8 @@ export default function AdminEventDetail() {
   const [newHostUserId, setNewHostUserId] = useState<string>("");
   const [newSharedCostName, setNewSharedCostName] = useState<string>("");
   const [newSharedCostAmountIrr, setNewSharedCostAmountIrr] = useState<string>("");
+
+  const [orderSummaryMenuName, setOrderSummaryMenuName] = useState("");
 
   const [eventParticipantSearch, setEventParticipantSearch] = useState("");
   const [eventParticipantOwnerUserId, setEventParticipantOwnerUserId] = useState("");
@@ -252,6 +271,35 @@ export default function AdminEventDetail() {
     return summaries.filter((ps) => ps.payorUserId === chargesPreviewPayorUserId);
   }, [chargesPreview, chargesPreviewPayorUserId]);
 
+  const orderSummaryItems = useMemo(() => {
+    const byItem = new Map<string, { itemName: string; quantity: number }>();
+
+    const scopedSelections = orderSummaryMenuName
+      ? selections.filter((s) => s.menu_name === orderSummaryMenuName)
+      : selections;
+
+    for (const s of scopedSelections) {
+      const key = String(s.item_name || "");
+      if (!byItem.has(key)) {
+        byItem.set(key, { itemName: s.item_name, quantity: 0 });
+      }
+      const agg = byItem.get(key)!;
+      agg.quantity += Number(s.quantity ?? 0) || 0;
+    }
+
+    return [...byItem.values()].sort((a, b) => {
+      return (a.itemName || "").localeCompare(b.itemName || "");
+    });
+  }, [selections, orderSummaryMenuName]);
+
+  const orderSummaryMenuNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of menus) {
+      if (m?.name) s.add(m.name);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [menus]);
+
   const load = async () => {
     if (!eventId) return;
 
@@ -259,7 +307,7 @@ export default function AdminEventDetail() {
     setError(null);
 
     try {
-      const [evRes, usersRes, guestsRes, hostsRes, sharedCostsRes, menusRes, participantsRes, eventParticipantsRes, overridesRes] = await Promise.all([
+      const [evRes, usersRes, guestsRes, hostsRes, sharedCostsRes, menusRes, participantsRes, eventParticipantsRes, overridesRes, selectionsRes] = await Promise.all([
         api.fetch(`/api/v1/admin/events/${eventId}`, { method: "GET" }),
         api.fetch("/api/v1/admin/users", { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/guests`, { method: "GET" }),
@@ -268,7 +316,8 @@ export default function AdminEventDetail() {
         api.fetch(`/api/v1/admin/events/${eventId}/menus`, { method: "GET" }),
         api.fetch("/api/v1/admin/participants", { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/participants`, { method: "GET" }),
-        api.fetch(`/api/v1/admin/events/${eventId}/payor-overrides`, { method: "GET" })
+        api.fetch(`/api/v1/admin/events/${eventId}/payor-overrides`, { method: "GET" }),
+        api.fetch(`/api/v1/admin/events/${eventId}/selections`, { method: "GET" })
       ]);
 
       const ev = (await evRes.json()) as EventRow;
@@ -282,6 +331,7 @@ export default function AdminEventDetail() {
       setParticipants((await participantsRes.json()) as ParticipantRow[]);
       setEventParticipants((await eventParticipantsRes.json()) as EventParticipantRow[]);
       setOverrides((await overridesRes.json()) as PayorOverrideRow[]);
+      setSelections((await selectionsRes.json()) as SelectionRow[]);
 
       const chargesRes = await api.fetch(`/api/v1/admin/events/${eventId}/charges`, { method: "GET" });
       setCharges((await chargesRes.json()) as ChargeRow[]);
@@ -706,6 +756,41 @@ export default function AdminEventDetail() {
           </CardContent>
         </Card>
       </Stack>
+
+      <Card sx={{ mt: 3 }}>
+        <CardHeader title={t("admin.events.detail.orderSummary", { defaultValue: "Order Summary" })} />
+        <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 240 }}>
+              <InputLabel>{t("admin.events.detail.filterMenu", { defaultValue: "Menu" })}</InputLabel>
+              <Select
+                value={orderSummaryMenuName}
+                label={t("admin.events.detail.filterMenu", { defaultValue: "Menu" })}
+                onChange={(e) => setOrderSummaryMenuName(e.target.value)}
+              >
+                <MenuItem value="">--</MenuItem>
+                {orderSummaryMenuNames.map((m) => (
+                  <MenuItem key={m} value={m}>{m}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+
+          {orderSummaryItems.length === 0 ? (
+            <Typography color="text.secondary">
+              {t("admin.events.detail.orderSummaryEmpty", { defaultValue: "No selections yet." })}
+            </Typography>
+          ) : (
+            <Stack spacing={0.5}>
+              {orderSummaryItems.map((x) => (
+                <Typography key={x.itemName} variant="body2">
+                  {x.itemName} × {x.quantity}
+                </Typography>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
 
       <Card sx={{ mt: 3 }}>
         <CardHeader

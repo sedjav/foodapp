@@ -35,6 +35,13 @@ type MenuItemRow = {
   tags: string[];
 };
 
+type UserRow = {
+  id: string;
+  email: string;
+  mobilePhone?: string;
+  displayName: string;
+};
+
 type ParticipantRow = {
   id: string;
   owner_user_id: string;
@@ -72,6 +79,7 @@ export default function AdminSelections() {
   const { eventId } = useParams();
 
   const [menuItems, setMenuItems] = useState<MenuItemRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [eventParticipants, setEventParticipants] = useState<EventParticipantRow[]>([]);
   const [selections, setSelections] = useState<SelectionRow[]>([]);
@@ -82,9 +90,27 @@ export default function AdminSelections() {
   const [quantity, setQuantity] = useState(1);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<Record<string, boolean>>({});
 
+  const [existingSearchParticipantName, setExistingSearchParticipantName] = useState("");
+  const [existingOwnerUserId, setExistingOwnerUserId] = useState("");
+  const [existingMenuName, setExistingMenuName] = useState("");
+  const [existingFoodName, setExistingFoodName] = useState("");
+
   const participantLabel = (pid: string) => {
     const p = participants.find((x) => x.id === pid);
     return p ? p.display_name : pid;
+  };
+
+  const userById = useMemo(() => {
+    const m = new Map<string, UserRow>();
+    for (const u of users) m.set(u.id, u);
+    return m;
+  }, [users]);
+
+  const userLabel = (id: string) => {
+    const u = userById.get(id);
+    if (!u) return id;
+    const contact = u.mobilePhone || u.email;
+    return contact ? `${u.displayName} (${contact})` : u.displayName;
   };
 
   const attendingParticipantIds = useMemo(() => {
@@ -115,14 +141,16 @@ export default function AdminSelections() {
     setError(null);
 
     try {
-      const [itemsRes, participantsRes, eventParticipantsRes, selectionsRes] = await Promise.all([
+      const [itemsRes, usersRes, participantsRes, eventParticipantsRes, selectionsRes] = await Promise.all([
         api.fetch(`/api/v1/admin/events/${eventId}/menu-items`, { method: "GET" }),
+        api.fetch(`/api/v1/admin/users`, { method: "GET" }),
         api.fetch(`/api/v1/admin/participants`, { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/participants`, { method: "GET" }),
         api.fetch(`/api/v1/admin/events/${eventId}/selections`, { method: "GET" })
       ]);
 
       setMenuItems((await itemsRes.json()) as MenuItemRow[]);
+      setUsers((await usersRes.json()) as UserRow[]);
       setParticipants((await participantsRes.json()) as ParticipantRow[]);
       setEventParticipants((await eventParticipantsRes.json()) as EventParticipantRow[]);
       setSelections((await selectionsRes.json()) as SelectionRow[]);
@@ -182,6 +210,58 @@ export default function AdminSelections() {
       setError(err?.message ?? "Error");
     }
   };
+
+  const existingOwnerUserIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const ep of eventParticipants) {
+      const p = participants.find((x) => x.id === ep.participant_id);
+      if (p?.owner_user_id) s.add(p.owner_user_id);
+    }
+    return [...s].sort((a, b) => userLabel(a).localeCompare(userLabel(b)));
+  }, [eventParticipants, participants, users]);
+
+  const existingMenuNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const sel of selections) {
+      if (sel.menu_name) s.add(sel.menu_name);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [selections]);
+
+  const existingFoodNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const sel of selections) {
+      if (sel.item_name) s.add(sel.item_name);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [selections]);
+
+  const filteredSelections = useMemo(() => {
+    const q = existingSearchParticipantName.trim().toLowerCase();
+
+    return selections.filter((s) => {
+      if (existingMenuName && s.menu_name !== existingMenuName) return false;
+      if (existingFoodName && s.item_name !== existingFoodName) return false;
+
+      if (existingOwnerUserId || q) {
+        const allocatedParticipants = (s.allocations ?? [])
+          .map((a) => participants.find((p) => p.id === a.participant_id))
+          .filter(Boolean) as ParticipantRow[];
+
+        if (existingOwnerUserId) {
+          const hasOwner = allocatedParticipants.some((p) => p.owner_user_id === existingOwnerUserId);
+          if (!hasOwner) return false;
+        }
+
+        if (q) {
+          const hasName = allocatedParticipants.some((p) => (p.display_name ?? "").toLowerCase().includes(q));
+          if (!hasName) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [selections, participants, existingMenuName, existingFoodName, existingOwnerUserId, existingSearchParticipantName]);
 
   if (loading) {
     return (
@@ -287,8 +367,56 @@ export default function AdminSelections() {
         <Card sx={{ flex: 2 }}>
           <CardHeader title={t("admin.selections.listTitle")} />
           <CardContent>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+              <TextField
+                size="small"
+                label={t("admin.selections.searchParticipant", { defaultValue: "Search participant" })}
+                value={existingSearchParticipantName}
+                onChange={(e) => setExistingSearchParticipantName(e.target.value)}
+                fullWidth
+              />
+              <FormControl size="small" sx={{ minWidth: 240 }}>
+                <InputLabel>{t("admin.selections.filterOwner", { defaultValue: "Owner" })}</InputLabel>
+                <Select
+                  value={existingOwnerUserId}
+                  label={t("admin.selections.filterOwner", { defaultValue: "Owner" })}
+                  onChange={(e) => setExistingOwnerUserId(e.target.value)}
+                >
+                  <MenuItem value="">--</MenuItem>
+                  {existingOwnerUserIds.map((uid) => (
+                    <MenuItem key={uid} value={uid}>{userLabel(uid)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>{t("admin.selections.filterMenu", { defaultValue: "Menu" })}</InputLabel>
+                <Select
+                  value={existingMenuName}
+                  label={t("admin.selections.filterMenu", { defaultValue: "Menu" })}
+                  onChange={(e) => setExistingMenuName(e.target.value)}
+                >
+                  <MenuItem value="">--</MenuItem>
+                  {existingMenuNames.map((m) => (
+                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>{t("admin.selections.filterFood", { defaultValue: "Food" })}</InputLabel>
+                <Select
+                  value={existingFoodName}
+                  label={t("admin.selections.filterFood", { defaultValue: "Food" })}
+                  onChange={(e) => setExistingFoodName(e.target.value)}
+                >
+                  <MenuItem value="">--</MenuItem>
+                  {existingFoodNames.map((f) => (
+                    <MenuItem key={f} value={f}>{f}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
             <Stack spacing={2}>
-              {selections.map((s) => (
+              {filteredSelections.map((s) => (
                 <Card key={s.id} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
