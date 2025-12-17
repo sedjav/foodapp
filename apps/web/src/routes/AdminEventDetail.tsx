@@ -701,7 +701,7 @@ export default function AdminEventDetail() {
   const invalidSchedule = Number.isFinite(startsMs) && Number.isFinite(cutoffMs) ? cutoffMs > startsMs : false;
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: "100%", overflowX: "hidden" }}>
       <Card sx={{ mb: 3 }}>
         <CardHeader
           title={`${t("admin.events.detail.title")}: ${event.name}`}
@@ -745,7 +745,7 @@ export default function AdminEventDetail() {
 
             <Divider sx={{ my: 1 }} />
 
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
               <Typography variant="body2">{t("admin.events.detail.changeState")}:</Typography>
               <FormControl size="small" sx={{ minWidth: 150 }}>
                 <Select
@@ -849,7 +849,7 @@ export default function AdminEventDetail() {
         <Card sx={{ flex: 1 }}>
           <CardHeader title={t("admin.events.detail.guests")} />
           <CardContent>
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel>{t("admin.events.detail.selectUser")}</InputLabel>
                 <Select
@@ -879,7 +879,7 @@ export default function AdminEventDetail() {
         <Card sx={{ flex: 1 }}>
           <CardHeader title={t("admin.events.detail.menus")} />
           <CardContent>
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
               <TextField
                 size="small"
                 value={menuName}
@@ -1035,14 +1035,17 @@ export default function AdminEventDetail() {
               return (
                 <Card key={ep.participant_id} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }} justifyContent="space-between">
+                    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={2}>
                       <Box>
                         <Typography variant="subtitle2">{participant?.display_name ?? ep.participant_id}</Typography>
                         <Typography variant="caption" color="text.secondary">
+                          {t("admin.events.detail.owner")}: {participant ? userLabel(participant.owner_user_id) : ep.participant_id}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                           {t("admin.events.detail.attendance")}: {ep.attendance_status}
                         </Typography>
                       </Box>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
                         <FormControl size="small" sx={{ minWidth: 180 }}>
                           <InputLabel>{t("admin.events.detail.payorOverride")}</InputLabel>
                           <Select

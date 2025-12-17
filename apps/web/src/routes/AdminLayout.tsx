@@ -47,12 +47,6 @@ export default function AdminLayout() {
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const drawerAnchor = theme.direction === "rtl" ? "right" : "left";
-  const drawerPaperBorderStyles =
-    theme.direction === "rtl"
-      ? { borderLeft: "1px solid", borderRight: "none" }
-      : { borderRight: "1px solid", borderLeft: "none" };
-
   useEffect(() => {
     if (loading) return;
     if (!me) return;
@@ -152,10 +146,9 @@ export default function AdminLayout() {
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <Drawer
         variant="temporary"
-        anchor={drawerAnchor}
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
         ModalProps={{ keepMounted: true }}
@@ -164,8 +157,8 @@ export default function AdminLayout() {
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
             boxSizing: "border-box",
-            borderColor: "divider",
-            ...drawerPaperBorderStyles
+            borderRight: "1px solid",
+            borderColor: "divider"
           }
         }}
       >
@@ -174,7 +167,6 @@ export default function AdminLayout() {
 
       <Drawer
         variant="permanent"
-        anchor={drawerAnchor}
         sx={{
           display: { xs: "none", md: "block" },
           width: DRAWER_WIDTH,
@@ -182,8 +174,8 @@ export default function AdminLayout() {
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
             boxSizing: "border-box",
-            borderColor: "divider",
-            ...drawerPaperBorderStyles
+            borderRight: "1px solid",
+            borderColor: "divider"
           }
         }}
         open
@@ -191,7 +183,7 @@ export default function AdminLayout() {
         {drawerContent}
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowX: "hidden" }}>
+      <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
         <AppBar
           position="static"
           color="default"
