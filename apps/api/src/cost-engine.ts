@@ -13,6 +13,7 @@ export type ParticipantCharge = {
     unitPriceIrr: number;
     shareCount: number;
     shareAmountIrr: number;
+    isHostRedistribution?: boolean;
   }[];
 };
 
@@ -184,6 +185,9 @@ export async function computeEventCharges(db: Db, eventId: string): Promise<{
     const finalAllocated = chargeableAllocated.length > 0 ? chargeableAllocated : nonHostAttendingAll;
     if (finalAllocated.length === 0) continue;
 
+    const hasHostAllocations = hostFoodExemptionEnabled && attendingAllocated.some((pid) => isHostParticipant(pid));
+    const isHostRedistribution = hasHostAllocations && chargeableAllocated.length === 0;
+
     const totalCost = s.quantity * s.price_irr;
     const shareCount = finalAllocated.length;
     const perShare = Math.floor(totalCost / shareCount);
@@ -211,7 +215,8 @@ export async function computeEventCharges(db: Db, eventId: string): Promise<{
         quantity: s.quantity,
         unitPriceIrr: s.price_irr,
         shareCount,
-        shareAmountIrr: perShare
+        shareAmountIrr: perShare,
+        isHostRedistribution
       });
     }
   }
