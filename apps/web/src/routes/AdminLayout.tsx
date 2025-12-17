@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link as RouterLink, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 
@@ -22,15 +22,19 @@ import {
   CircularProgress,
   Divider,
   Drawer,
+  IconButton,
   Link,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
   Stack,
+  SvgIcon,
   Toolbar,
-  Typography
+  Typography,
+  useMediaQuery
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
 const DRAWER_WIDTH = 240;
 
@@ -39,6 +43,15 @@ export default function AdminLayout() {
   const { loading, me, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const drawerAnchor = theme.direction === "rtl" ? "right" : "left";
+  const drawerPaperBorderStyles =
+    theme.direction === "rtl"
+      ? { borderLeft: "1px solid", borderRight: "none" }
+      : { borderRight: "1px solid", borderLeft: "none" };
 
   useEffect(() => {
     if (loading) return;
@@ -80,71 +93,105 @@ export default function AdminLayout() {
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
+  const go = (path: string) => {
+    navigate(path);
+    setMobileOpen(false);
+  };
+
+  const drawerContent = (
+    <>
+      <Toolbar>
+        <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: "primary.main" }}>
+          {t("admin.title")}
+        </Typography>
+      </Toolbar>
+      <Divider />
+      <List sx={{ flex: 1 }}>
+        {navItems.map((item) => (
+          <ListItem key={item.path} disablePadding>
+            <ListItemButton
+              selected={isActive(item.path)}
+              onClick={() => go(item.path)}
+              sx={{
+                "&.Mui-selected": {
+                  backgroundColor: "primary.light",
+                  color: "primary.contrastText",
+                  "&:hover": {
+                    backgroundColor: "primary.main"
+                  }
+                }
+              }}
+            >
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+      <Divider />
+      <Box sx={{ p: 2 }}>
+        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+          {me.displayName}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          {me.email}
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          fullWidth
+          onClick={() => {
+            logout();
+            setMobileOpen(false);
+            navigate("/admin", { replace: true });
+          }}
+        >
+          {t("admin.logout")}
+        </Button>
+      </Box>
+    </>
+  );
+
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
+      <Drawer
+        variant="temporary"
+        anchor={drawerAnchor}
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": {
+            width: DRAWER_WIDTH,
+            boxSizing: "border-box",
+            borderColor: "divider",
+            ...drawerPaperBorderStyles
+          }
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+
       <Drawer
         variant="permanent"
+        anchor={drawerAnchor}
         sx={{
+          display: { xs: "none", md: "block" },
           width: DRAWER_WIDTH,
           flexShrink: 0,
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
             boxSizing: "border-box",
-            borderRight: "1px solid",
-            borderColor: "divider"
+            borderColor: "divider",
+            ...drawerPaperBorderStyles
           }
         }}
+        open
       >
-        <Toolbar>
-          <Typography variant="h6" noWrap sx={{ fontWeight: 700, color: "primary.main" }}>
-            {t("admin.title")}
-          </Typography>
-        </Toolbar>
-        <Divider />
-        <List sx={{ flex: 1 }}>
-          {navItems.map((item) => (
-            <ListItem key={item.path} disablePadding>
-              <ListItemButton
-                selected={isActive(item.path)}
-                onClick={() => navigate(item.path)}
-                sx={{
-                  "&.Mui-selected": {
-                    backgroundColor: "primary.light",
-                    color: "primary.contrastText",
-                    "&:hover": {
-                      backgroundColor: "primary.main"
-                    }
-                  }
-                }}
-              >
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-        <Divider />
-        <Box sx={{ p: 2 }}>
-          <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-            {me.displayName}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-            {me.email}
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            fullWidth
-            onClick={() => {
-              logout();
-              navigate("/admin", { replace: true });
-            }}
-          >
-            {t("admin.logout")}
-          </Button>
-        </Box>
+        {drawerContent}
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowX: "hidden" }}>
         <AppBar
           position="static"
           color="default"
@@ -152,6 +199,13 @@ export default function AdminLayout() {
           sx={{ borderBottom: "1px solid", borderColor: "divider" }}
         >
           <Toolbar>
+            {!isDesktop && (
+              <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1 }}>
+                <SvgIcon>
+                  <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+                </SvgIcon>
+              </IconButton>
+            )}
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               {navItems.find((item) => isActive(item.path))?.label ?? t("admin.title")}
             </Typography>
