@@ -25,7 +25,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const apiFetch = async (input: RequestInfo | URL, init: RequestInit = {}, token: string | null = null) => {
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  const hasBody = init.body !== undefined && init.body !== null && !(typeof init.body === "string" && init.body.length === 0);
+  if (hasBody) {
+    headers.set("Content-Type", "application/json");
+  } else {
+    headers.delete("Content-Type");
+  }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(input, {
