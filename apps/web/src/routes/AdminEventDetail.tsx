@@ -232,18 +232,28 @@ export default function AdminEventDetail() {
 
   const addHost = async () => {
     if (!eventId || !newHostUserId) return;
-    await api.fetch(`/api/v1/admin/events/${eventId}/hosts`, {
-      method: "POST",
-      body: JSON.stringify({ userId: newHostUserId })
-    });
-    setNewHostUserId("");
-    await load();
+    setError(null);
+    try {
+      await api.fetch(`/api/v1/admin/events/${eventId}/hosts`, {
+        method: "POST",
+        body: JSON.stringify({ userId: newHostUserId })
+      });
+      setNewHostUserId("");
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "Error");
+    }
   };
 
   const removeHost = async (userId: string) => {
     if (!eventId) return;
-    await api.fetch(`/api/v1/admin/events/${eventId}/hosts/${userId}`, { method: "DELETE" });
-    await load();
+    setError(null);
+    try {
+      await api.fetch(`/api/v1/admin/events/${eventId}/hosts/${userId}`, { method: "DELETE" });
+      await load();
+    } catch (err: any) {
+      setError(err?.message ?? "Error");
+    }
   };
 
   const updateLocation = async (nextUserId: string) => {
@@ -469,7 +479,7 @@ export default function AdminEventDetail() {
       </Card>
 
       <Card sx={{ mt: 3 }}>
-        <CardHeader title={t("admin.events.detail.sharedCosts") ?? "Shared Costs"} />
+        <CardHeader title={t("admin.events.detail.sharedCosts", { defaultValue: "Shared Costs" })} />
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
             <TextField
@@ -531,7 +541,7 @@ export default function AdminEventDetail() {
               {hosts.map((h) => (
                 <Stack key={h.user_id} direction="row" justifyContent="space-between" alignItems="center">
                   <Typography variant="body2">{userLabel(h.user_id)}</Typography>
-                  <Button size="small" color="error" onClick={() => removeHost(h.user_id)}>
+                  <Button size="small" color="error" onClick={() => removeHost(h.user_id)} disabled={hosts.length <= 1}>
                     {t("admin.events.detail.remove")}
                   </Button>
                 </Stack>
