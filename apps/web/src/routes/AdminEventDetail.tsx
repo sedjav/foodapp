@@ -182,37 +182,25 @@ export default function AdminEventDetail() {
     const participantOwnerById = new Map<string, string>();
     for (const p of participants) participantOwnerById.set(p.id, p.owner_user_id);
 
-    const isHostParticipant = (participantId: string) => {
-      const ownerId = participantOwnerById.get(participantId);
-      return ownerId ? hostIds.has(ownerId) : false;
-    };
-
-    const byPayor = new Map<
-      string,
-      {
-        foodIrr: number;
-        sharedCostsIrr: number;
-        hostParticipantsIrr: number;
-      }
-    >();
+    const byPayor = new Map<string, { selfFoodIrr: number; selfSharedCostsIrr: number }>();
 
     for (const pc of pcs) {
       if (!byPayor.has(pc.payorUserId)) {
-        byPayor.set(pc.payorUserId, { foodIrr: 0, sharedCostsIrr: 0, hostParticipantsIrr: 0 });
+        byPayor.set(pc.payorUserId, { selfFoodIrr: 0, selfSharedCostsIrr: 0 });
       }
       const agg = byPayor.get(pc.payorUserId)!;
 
-      if (isHostParticipant(pc.participantId)) {
-        agg.hostParticipantsIrr += pc.totalIrr;
-      }
+      const ownerId = participantOwnerById.get(pc.participantId);
+      const isSelf = ownerId === pc.payorUserId;
+      if (!isSelf) continue;
 
       for (const b of pc.breakdown ?? []) {
         const lineAmount = (b.shareAmountIrr ?? 0);
         if (typeof lineAmount !== "number") continue;
         if (String(b.selectionId).startsWith("shared:")) {
-          agg.sharedCostsIrr += lineAmount;
+          agg.selfSharedCostsIrr += lineAmount;
         } else {
-          agg.foodIrr += lineAmount;
+          agg.selfFoodIrr += lineAmount;
         }
       }
     }
@@ -762,20 +750,21 @@ export default function AdminEventDetail() {
           ) : (
             <Stack spacing={2}>
               {chargesPreview!.payorSummaries.map((ps) => {
-                const bd = payorBreakdowns.get(ps.payorUserId) ?? { foodIrr: 0, sharedCostsIrr: 0, hostParticipantsIrr: 0 };
+                const bd = payorBreakdowns.get(ps.payorUserId) ?? { selfFoodIrr: 0, selfSharedCostsIrr: 0 };
+                const hostFeeIrr = Math.max(0, ps.totalIrr - (bd.selfFoodIrr + bd.selfSharedCostsIrr));
                 return (
                 <Card key={ps.payorUserId} variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
                     <Typography variant="subtitle2">{ps.payorEmail} — {ps.totalIrr.toLocaleString()} IRR</Typography>
                     <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary">
-                        {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {bd.foodIrr.toLocaleString()} IRR
+                        {t("admin.events.detail.breakdownFood", { defaultValue: "Food" })}: {bd.selfFoodIrr.toLocaleString()} IRR
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t("admin.events.detail.breakdownSharedCosts", { defaultValue: "Shared costs" })}: {bd.sharedCostsIrr.toLocaleString()} IRR
+                        {t("admin.events.detail.breakdownSharedCosts", { defaultValue: "Shared costs" })}: {bd.selfSharedCostsIrr.toLocaleString()} IRR
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t("admin.events.detail.breakdownHost", { defaultValue: "Host participants" })}: {bd.hostParticipantsIrr.toLocaleString()} IRR
+                        {t("admin.events.detail.breakdownHostFee", { defaultValue: "Host fee" })}: {hostFeeIrr.toLocaleString()} IRR
                       </Typography>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
